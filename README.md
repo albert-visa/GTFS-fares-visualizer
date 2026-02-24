@@ -3,8 +3,8 @@
 Aplicació Streamlit per carregar un fitxer GTFS `.zip` i visualitzar en mapa:
 
 - Àrees (`areas` + `stop_areas` + `stops`)
-- Connexions entre àrees (`fare_leg_rules`)
-- Stops (mostra de fins a 2000 punts)
+- Connexions entre àrees (`fare_leg_rules`) amb filtre on/off
+- Stops (opcional, amb límit configurable i clustering)
 
 ## Requisits
 
@@ -17,6 +17,13 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
+
+## Millores de rendiment aplicades
+
+- Càrrega de ZIP i càlcul de geometries amb cache (`st.cache_data`).
+- Layer de stops desactivat per defecte.
+- Stops dibuixats amb `FastMarkerCluster` i límit configurable.
+- Canvas preferit a Leaflet per render més fluid (`prefer_canvas=True`).
 
 ## Notes de visualització
 
