@@ -5,7 +5,7 @@ from typing import Dict, Optional
 import folium
 import pandas as pd
 import streamlit as st
-from folium.plugins import FastMarkerCluster
+from folium.plugins import FastMarkerCluster, Fullscreen
 from streamlit_folium import st_folium
 
 REQUIRED_TABLES = [
@@ -20,6 +20,7 @@ REQUIRED_TABLES = [
     "stop_times",
     "stops",
     "trips",
+    "fare_transfer_rules",
 ]
 
 
@@ -71,11 +72,26 @@ def detect_leg_rule_columns(df_fare_leg_rules: pd.DataFrame) -> tuple[Optional[s
     return src, dst
 
 
+def filter_areas(areas_geom: pd.DataFrame, hide_tjove: bool) -> pd.DataFrame:
+    if not hide_tjove or areas_geom.empty:
+        return areas_geom
+
+    name_col = "area_name" if "area_name" in areas_geom.columns else None
+    if name_col:
+        mask = areas_geom[name_col].fillna("").str.upper() != "TJOVE"
+        return areas_geom[mask].copy()
+
+    # Fallback: if no area_name exists, try area_id exact match
+    mask = areas_geom["area_id"].fillna("").str.upper() != "TJOVE"
+    return areas_geom[mask].copy()
+
+
 def create_map(
     data: Dict[str, pd.DataFrame],
     show_connections: bool,
     show_stops: bool,
     max_stops: int,
+    hide_tjove: bool,
 ) -> folium.Map:
     df_stops = data["stops"].copy()
     df_stops["stop_lat"] = to_float(df_stops["stop_lat"])
@@ -84,6 +100,7 @@ def create_map(
 
     map_center = [df_stops["stop_lat"].mean(), df_stops["stop_lon"].mean()]
     m = folium.Map(location=map_center, zoom_start=11, tiles="cartodbpositron", prefer_canvas=True)
+    Fullscreen(position="topright", title="Maximitzar", title_cancel="Sortir pantalla completa", force_separate_button=True).add_to(m)
 
     areas_geom = pd.DataFrame()
     if "stop_areas" in data and "area_id" in data["stop_areas"].columns:
@@ -92,6 +109,8 @@ def create_map(
         areas_meta = data.get("areas", pd.DataFrame())
         if "area_id" in areas_meta.columns:
             areas_geom = areas_geom.merge(areas_meta, on="area_id", how="left")
+
+        areas_geom = filter_areas(areas_geom, hide_tjove=hide_tjove)
 
         area_fg = folium.FeatureGroup(name="Àrees", show=True)
         for _, row in areas_geom.iterrows():
@@ -177,12 +196,14 @@ def main() -> None:
         return
 
     st.subheader("Filtres de visualització")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         show_connections = st.checkbox("Mostrar connexions entre zones", value=True)
     with col2:
         show_stops = st.checkbox("Mostrar stops", value=False)
     with col3:
+        hide_tjove = st.checkbox("Amagar àrea TJOVE", value=True)
+    with col4:
         max_stops = st.slider("Màxim de stops a dibuixar", min_value=500, max_value=10000, step=500, value=2500)
 
     map_object = create_map(
@@ -190,13 +211,17 @@ def main() -> None:
         show_connections=show_connections,
         show_stops=show_stops,
         max_stops=max_stops,
+        hide_tjove=hide_tjove,
     )
     st_folium(map_object, width=1400, height=760)
 
     with st.expander("Previsualització de dades"):
+        hidden_tables = {"routes", "shapes", "trips"}
         for name in loaded:
+            if name in hidden_tables:
+                continue
             st.markdown(f"**{name}.txt** ({len(data[name])} files)")
-            st.dataframe(data[name].head(20), use_container_width=True)
+            st.dataframe(data[name], use_container_width=True, height=320)
 
 
 if __name__ == "__main__":
