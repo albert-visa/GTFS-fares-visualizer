@@ -1,4 +1,5 @@
 import io
+import re
 import zipfile
 from typing import Dict, Optional
 
@@ -22,6 +23,18 @@ REQUIRED_TABLES = [
     "trips",
     "fare_transfer_rules",
 ]
+
+CATEGORY_FERROVIARIES = "Estacions ferroviàries"
+CATEGORY_MUNICIPIS_BUS = "Municipis d'excepcions de bus"
+CATEGORY_SECTORS = "Sectors tarifaris"
+CATEGORY_TJOVE = "T-JOVE"
+
+CATEGORY_COLORS = {
+    CATEGORY_FERROVIARIES: "#F08C00",  # taronja
+    CATEGORY_MUNICIPIS_BUS: "#8E44AD",  # lila
+    CATEGORY_SECTORS: "#1E88E5",  # blau
+    CATEGORY_TJOVE: "#2E7D32",  # verd
+}
 
 
 @st.cache_data(show_spinner=False)
@@ -72,18 +85,61 @@ def detect_leg_rule_columns(df_fare_leg_rules: pd.DataFrame) -> tuple[Optional[s
     return src, dst
 
 
-def filter_areas(areas_geom: pd.DataFrame, hide_tjove: bool) -> pd.DataFrame:
-    if not hide_tjove or areas_geom.empty:
+def normalize_text(value: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(value).upper())
+
+
+def classify_area(area_id: str, area_name: str) -> str:
+    norm_id = normalize_text(area_id)
+    norm_name = normalize_text(area_name)
+
+    if "TJOVE" in norm_id or "TJOVE" in norm_name:
+        return CATEGORY_TJOVE
+
+    if "FGC" in norm_id or "ROD" in norm_id:
+        return CATEGORY_FERROVIARIES
+
+    if re.fullmatch(r"\d{5,}", str(area_id).strip()):
+        return CATEGORY_MUNICIPIS_BUS
+
+    return CATEGORY_SECTORS
+
+
+def apply_area_categories(areas_geom: pd.DataFrame) -> pd.DataFrame:
+    if areas_geom.empty:
         return areas_geom
 
-    name_col = "area_name" if "area_name" in areas_geom.columns else None
-    if name_col:
-        mask = areas_geom[name_col].fillna("").str.upper() != "TJOVE"
-        return areas_geom[mask].copy()
+    area_names = areas_geom["area_name"] if "area_name" in areas_geom.columns else pd.Series([""] * len(areas_geom))
+    categories = [
+        classify_area(area_id=row_area_id, area_name=row_area_name)
+        for row_area_id, row_area_name in zip(areas_geom["area_id"], area_names)
+    ]
+    out = areas_geom.copy()
+    out["area_category"] = categories
+    return out
 
-    # Fallback: if no area_name exists, try area_id exact match
-    mask = areas_geom["area_id"].fillna("").str.upper() != "TJOVE"
-    return areas_geom[mask].copy()
+
+def filter_areas_by_category(
+    areas_geom: pd.DataFrame,
+    show_sectors: bool,
+    show_municipis_bus: bool,
+    show_ferroviaries: bool,
+    show_tjove: bool,
+) -> pd.DataFrame:
+    if areas_geom.empty:
+        return areas_geom
+
+    allowed = set()
+    if show_sectors:
+        allowed.add(CATEGORY_SECTORS)
+    if show_municipis_bus:
+        allowed.add(CATEGORY_MUNICIPIS_BUS)
+    if show_ferroviaries:
+        allowed.add(CATEGORY_FERROVIARIES)
+    if show_tjove:
+        allowed.add(CATEGORY_TJOVE)
+
+    return areas_geom[areas_geom["area_category"].isin(allowed)].copy()
 
 
 def create_map(
@@ -91,7 +147,10 @@ def create_map(
     show_connections: bool,
     show_stops: bool,
     max_stops: int,
-    hide_tjove: bool,
+    show_sectors: bool,
+    show_municipis_bus: bool,
+    show_ferroviaries: bool,
+    show_tjove: bool,
 ) -> folium.Map:
     df_stops = data["stops"].copy()
     df_stops["stop_lat"] = to_float(df_stops["stop_lat"])
@@ -100,7 +159,12 @@ def create_map(
 
     map_center = [df_stops["stop_lat"].mean(), df_stops["stop_lon"].mean()]
     m = folium.Map(location=map_center, zoom_start=11, tiles="cartodbpositron", prefer_canvas=True)
-    Fullscreen(position="topright", title="Maximitzar", title_cancel="Sortir pantalla completa", force_separate_button=True).add_to(m)
+    Fullscreen(
+        position="topright",
+        title="Maximitzar",
+        title_cancel="Sortir pantalla completa",
+        force_separate_button=True,
+    ).add_to(m)
 
     areas_geom = pd.DataFrame()
     if "stop_areas" in data and "area_id" in data["stop_areas"].columns:
@@ -110,32 +174,42 @@ def create_map(
         if "area_id" in areas_meta.columns:
             areas_geom = areas_geom.merge(areas_meta, on="area_id", how="left")
 
-        areas_geom = filter_areas(areas_geom, hide_tjove=hide_tjove)
+        areas_geom = apply_area_categories(areas_geom)
+        areas_geom = filter_areas_by_category(
+            areas_geom=areas_geom,
+            show_sectors=show_sectors,
+            show_municipis_bus=show_municipis_bus,
+            show_ferroviaries=show_ferroviaries,
+            show_tjove=show_tjove,
+        )
 
         area_fg = folium.FeatureGroup(name="Àrees", show=True)
         for _, row in areas_geom.iterrows():
+            category = row.get("area_category", CATEGORY_SECTORS)
+            area_color = CATEGORY_COLORS.get(category, "#0055AA")
             bounds = [[row["min_lat"], row["min_lon"]], [row["max_lat"], row["max_lon"]]]
             popup = (
                 f"<b>area_id:</b> {row['area_id']}<br>"
                 f"<b>nom:</b> {row.get('area_name', '-') or '-'}<br>"
+                f"<b>categoria:</b> {category}<br>"
                 f"<b>stops:</b> {int(row['points'])}"
             )
             folium.Rectangle(
                 bounds=bounds,
-                color="#0055AA",
+                color=area_color,
                 weight=1,
                 fill=True,
-                fill_opacity=0.12,
+                fill_opacity=0.15,
                 popup=popup,
             ).add_to(area_fg)
 
             folium.CircleMarker(
                 location=[row["center_lat"], row["center_lon"]],
                 radius=3,
-                color="#0055AA",
+                color=area_color,
                 fill=True,
                 fill_opacity=0.9,
-                tooltip=f"Àrea {row['area_id']}",
+                tooltip=f"Àrea {row['area_id']} ({category})",
             ).add_to(area_fg)
         area_fg.add_to(m)
 
@@ -173,9 +247,7 @@ def create_map(
 def main() -> None:
     st.set_page_config(page_title="GTFS Fares v2 Map", layout="wide")
     st.title("Visualitzador GTFS Fares v2")
-    st.write(
-        "Puja un ZIP GTFS. L'app carrega les taules rellevants i dibuixa àrees (stop_areas + stops)."
-    )
+    st.write("Puja un ZIP GTFS. L'app carrega les taules rellevants i dibuixa àrees (stop_areas + stops).")
 
     uploaded_file = st.file_uploader("ZIP GTFS", type=["zip"])
     if not uploaded_file:
@@ -196,22 +268,28 @@ def main() -> None:
         return
 
     st.subheader("Filtres de visualització")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         show_connections = st.checkbox("Mostrar connexions entre zones", value=True)
-    with col2:
         show_stops = st.checkbox("Mostrar stops", value=False)
+    with col2:
+        show_sectors = st.checkbox("Mostrar Sectors tarifaris", value=True)
+        show_municipis_bus = st.checkbox("Mostrar Municipis d'excepcions de bus", value=True)
     with col3:
-        hide_tjove = st.checkbox("Amagar àrea TJOVE", value=True)
-    with col4:
-        max_stops = st.slider("Màxim de stops a dibuixar", min_value=500, max_value=10000, step=500, value=2500)
+        show_ferroviaries = st.checkbox("Mostrar Estacions ferroviàries", value=True)
+        show_tjove = st.checkbox("Mostrar T-JOVE", value=False)
+
+    max_stops = st.slider("Màxim de stops a dibuixar", min_value=500, max_value=10000, step=500, value=2500)
 
     map_object = create_map(
         data=data,
         show_connections=show_connections,
         show_stops=show_stops,
         max_stops=max_stops,
-        hide_tjove=hide_tjove,
+        show_sectors=show_sectors,
+        show_municipis_bus=show_municipis_bus,
+        show_ferroviaries=show_ferroviaries,
+        show_tjove=show_tjove,
     )
     st_folium(map_object, width=1400, height=760)
 
