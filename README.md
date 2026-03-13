@@ -10,8 +10,7 @@ Aplicació Streamlit per carregar un fitxer GTFS `.zip` i visualitzar en mapa:
 <img width="1436" height="921" alt="aplicatiu_streamlit" src="https://github.com/user-attachments/assets/5773841d-d1c8-4dd8-8a40-0cd224ebad1e" />
 
 ## Requisits
-Crear una carpeta amb els arxius app.py, requirements.txt i README
-Obrir la consola de windows (W+r; cmd)
+Crear una carpeta amb els arxius app.py, requirements.txt i README. Obrir la consola de windows (W+r; cmd).
 A la consola, establir el directori
 ```bash
 cd gtfs
