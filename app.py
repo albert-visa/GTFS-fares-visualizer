@@ -22,6 +22,9 @@ REQUIRED_TABLES = [
     "stops",
     "trips",
     "fare_transfer_rules",
+    "fare_leg_join_rules",
+    "networks",
+    "route_networks",
 ]
 
 CATEGORY_FERROVIARIES = "Estacions ferroviàries"

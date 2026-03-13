@@ -5,7 +5,7 @@ Aplicació Streamlit per carregar un fitxer GTFS `.zip` i visualitzar en mapa:
 - Àrees (`areas` + `stop_areas` + `stops`) amb categories i colors
 - Connexions entre àrees (`fare_leg_rules`) amb filtre on/off
 - Stops (opcional, amb límit configurable i clustering)
-- Visualització completa de taules (incloent `fare_transfer_rules`)
+- Visualització completa de taules (incloent `fare_transfer_rules`, `fare_leg_join_rules`, `networks` i `route_networks`)
 
 ## Requisits
 
