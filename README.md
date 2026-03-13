@@ -25,6 +25,11 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
+Alternativament
+
+```bash
+py -m streamlit run app.py
+```
 
 ## Filtres i opcions
 
