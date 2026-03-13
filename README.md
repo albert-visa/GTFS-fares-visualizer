@@ -11,7 +11,7 @@ Aplicació Streamlit per carregar un fitxer GTFS `.zip` i visualitzar en mapa:
 
 ## Requisits
 Crear una carpeta amb els arxius app.py, requirements.txt i README. Obrir la consola de windows (W+r; cmd).
-A la consola, establir el directori i executar l'aplicació:
+A la consola, establir el directori i instal·lar requeriments:
 ```bash
 cd gtfs
 ```
@@ -25,7 +25,7 @@ pip install -r requirements.txt
 ```bash
 streamlit run app.py
 ```
-Alternativament
+Alternativament:
 
 ```bash
 py -m streamlit run app.py
