@@ -46,4 +46,4 @@ streamlit run app.py
 
 - Com que GTFS Fares v2 no defineix geometria d'àrees de forma directa, l'aplicació dibuixa un rectangle per àrea usant el bounding box dels stops assignats a cada `area_id`.
 - Les connexions s'infereixen de `fare_leg_rules` detectant automàticament les columnes d'origen/destinació més habituals (`from_area_id` / `to_area_id`, etc.).
-- En la secció de taules **no** es mostren `routes`, `shapes` ni `trips`.
+- En la secció de taules **no** es mostren `routes`, `shapes`, `trips` ni `stop_times`.

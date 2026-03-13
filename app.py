@@ -297,7 +297,7 @@ def main() -> None:
     st_folium(map_object, width=1400, height=760)
 
     with st.expander("Previsualització de dades"):
-        hidden_tables = {"routes", "shapes", "trips"}
+        hidden_tables = {"routes", "shapes", "trips", "stop_times"}
         for name in loaded:
             if name in hidden_tables:
                 continue
